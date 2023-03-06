@@ -381,7 +381,7 @@ def checkHorizontal2(slab1,slab2,sep,vac=None): #This checks the optimum horizon
         #TODO: complete this!! This is for doing scipy opt with respect to horizantal/vertical translations, getting SP energies.
 
         print("checkHorizontal: Not implemented yet")
-        exit()
+        exit() 
         ln1=len(slab1); ln2=len(slab2)
 
         if 0: #delete vacuum paddings
