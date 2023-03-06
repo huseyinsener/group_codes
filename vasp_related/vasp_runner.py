@@ -59,11 +59,12 @@ def vasp_continue(ifDel=0):
 
 def grep(key,fname,n=-1): 
     #Uses grep to get the nth line with the keyword from a given file. By default the last occurence is returned.
+        #try:
+        #        return popen4('grep -m %d "%s" %s '%(n,key,fname),"r")[1].readlines()[-1][0:-1] #don't take \n at the end.  #Fastest one!!!
+        #except: 
         try:
-                return popen4('grep -m %d "%s" %s '%(n,key,fname),"r")[1].readlines()[-1][0:-1] #don't take \n at the end.  #Fastest one!!!
-        except: 
                 return popen('grep -m %d "%s" %s '%(n,key,fname),"r").read()[0:-1]
-        else:
+        except:
                 return ""
 
 
@@ -142,7 +143,7 @@ def make_potcar(xc="potpaw_PBE",elements=None,wDir='./'):
             elements = open(wDir+"/POSCAR").readlines()[5].strip().split()
         except:
             print ('Elements not given on command line and POSCAR not found')
-            sys.exit(-1)
+            exit(-1)
 
     pp = get_potcar(elements, xc)
 
@@ -212,6 +213,11 @@ def call_vasp_v2(fname,exe=None,xc='pbe', mgms=None,hubU={}):
 
     return Ep,atoms
 
+
+################
+# Main Program #
+################
+
 try:    
     vasppp = os.environ['VASP_PP_PATH']
     ppdirs=os.listdir(vasppp)
@@ -232,26 +238,20 @@ parser.add_argument('-ow','--overwrite', default=False,action='store_true', help
 parser.add_argument('-dry','--dryrun', default=False,action='store_true', help='Dry run: do not call VASP, just gather information from VASP run folders. Def: No')
 
 parser.add_argument('-np', '--nprocs',type=int, default=32,help="No of processes to start for each VASP calculation throuh mpirun. Def:32")
-
+parser.add_argument('-mpi','--mpirun', default=False,action='store_true', help='Use mpirun for parallel runs. Default: srun is used')
 parser.add_argument('-exe','--exe', type=str,required=False, default='vasp_std',help='Vasp exectuable. Def: vasp_std')
 
-parser.add_argument('-xc','--xc', type=str,required=False, default='pbe',help='Exchange correlation functional to use (pseudopots will be selected accordingly, e.g. LDA, PBE,PBEsol, etc. Def: PBE')
 
 parser.add_argument('-ph','--phonons', default=False,action='store_true',help='Do a phonon calculation if the geometry is converged.')
 parser.add_argument('-ph_sc','--phonons_supercell', type=int,nargs=3,default=(2,2,2),help='Size of the supercell to be uused in the phonon calculation.Def: No supercell used, i.e. 1 1 1')
 parser.add_argument('-ph_del', '--phonons_delta',type=float, default=0.03,help="Stepsize to use in the finite difference method to compute force constants. Def:0.03 A")
-
 parser.add_argument('-ph_np','--phonons_noplot', default=False,action='store_true',help='Do a phonon calculation if the geometry is converged.')
-
 parser.add_argument('-ph_path','--phonons_path', default=None,type=str,help='The high-symmetry Q-point path for a phonon calculation.')
 
 parser.add_argument("-mgm","--magmoms", default=None, nargs="*", required=False, help="Magnetic moments for a collinear calculation. Eg, 'Fe 5.0 Nb 0.6 O 0.6' Def.: None. If a defined element is not present in the POSCAR, no MAGMOM will be set for it.")
-
 parser.add_argument("-hubU", "--hubU", type=str,nargs="*",help="For defining the Hubbard U parameters (in eV) for specific atom and orbital types, e.g. -hubU Fe d 2.7, Sm f 6.1")
-
-
+parser.add_argument('-xc','--xc', type=str,required=False, default='pbe',help='Exchange correlation functional to use (pseudopots will be selected accordingly, e.g. LDA, PBE,PBEsol, etc. Def: PBE')
 parser.add_argument('-mp','-makepotcar','--makepotcar', default=False,action='store_true', help='to compile POTCAR (for VASP) using actual atomic content. The environment variable ($VASP_PP_PATH) should be defined beforehand. Default: False.')
-
 parser.add_argument('--potcarxc', default="potpaw_PBE",type=str,choices=ppdirs,help='XC functional to use in making of POTCAR. Def: potpaw_PBE')
 
 args = parser.parse_args()
@@ -261,8 +261,8 @@ initT=time.time()
 from ase.spacegroup import Spacegroup,get_spacegroup
 
 
-exe="mpirun -np %d %s"%(args.nprocs,args.exe)
-#exe="srun -n %d %s"%(args.nprocs,args.exe)
+if args.mpirun: exe="mpirun -np %d %s"%(args.nprocs,args.exe)
+else: exe="srun -n %d %s"%(args.nprocs,args.exe)
 
 
 #########

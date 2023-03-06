@@ -52,18 +52,21 @@ from sys import stdout,version_info
 """
 #To-do list:
 -Option to run multiple configs at each step in parallel (rather than sequential).
--Support restarting !!!
 -Support for multiple dopant types
--Hubbard U params through ASE
--magmoms through ASE
 -Check for the size and atom number of the reference cell with input cell.
 -Check for the symm-equivalent configs before or after the structure modification (i.e. Li deletion)??
 -ADD PREOPTIMISE INPUT GEOM OPTION.
--Known issues with the interstital addition when using a ref structure smaller than the actual input structure
 
--Automate the sequential doping, choose for min-energy and high-symm structures at each step (Make code modular)  DONE
--Add the config entropy to the computed CASTEP energies ! DONE
--Option for CASTEP energies.  DONE
+Known issues:
+-the interstital addition not working properly when using a ref structure smaller than the actual input structure
+-when using '-spick S' option (picking the highest symmetry structure at each sequential step), configs are ordered in decreasing order of energy; must be vice versa, as now the highest energy structures with highest smmetry makes it to the next step.
+
+-(DONE) Support restarting !!! 
+-(DONE) Hubbard U params through ASE
+-(DONE) magmoms through ASE
+-(DONE) Automate the sequential doping, choose for min-energy and high-symm structures at each step (Make code modular)  DONE
+-(DONE) Add the config entropy to the computed CASTEP energies ! DONE
+-(DONE) Option for CASTEP energies.  DONE
 """
 
 def handle_magmoms(atoms, magmoms):
@@ -152,7 +155,7 @@ def call_vasp_v2(fname='',exe=None,xc='pbe',mgms=None,hubU={}): #atoms=None,
     cwd=os.getcwd()
 
     seed=fname.split('.')[0]
-    try:system();chdir(seed)
+    try:chdir(seed)
     except:print('Cannot change to %s directory, using %s instead'%(seed,cwd))
 
     print('Working dir: %s'%getcwd());stdout.flush();
@@ -228,7 +231,7 @@ def make_potcar(xc="potpaw_PBE",elements=None,wDir='./'):
             elements = open(wDir+"/POSCAR").readlines()[5].strip().split()
         except:
             print ('Elements not given on command line and POSCAR not found')
-            sys.exit(-1)
+            exit(-1)
 
     pp = get_potcar(elements, xc)
 
@@ -416,12 +419,12 @@ def lenAngleCell(cell,radians=False):#taken from ase.geometry.cell_to_cellpar
         ll = lengths[j] * lengths[k]
         if ll > 1e-16:
             x = np.dot(cell[j], cell[k]) / ll
-            angle = 180.0 / pi * arccos(x)
+            angle = 180.0 / np.pi * np.arccos(x)
         else:
             angle = 90.0
         angles.append(angle)
     if radians:
-        angles = [angle * pi / 180 for angle in angles]
+        angles = [angle * np.pi / 180 for angle in angles]
     return np.array(lengths + angles)
 
 def lenCell_old(cell):
@@ -624,105 +627,65 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='This script generates the input structures required for a configuration enumeration (including vacancies and dopants) for any software supported by ASE. \nScript can also create the input files (prim.json and config_list.json) required for CASM for further analysis. \nRequires ASE and SPGlib packages.\n Sample usage: config_enum.py -i LLZO-Ia-3dCollCode261302.cif -prim -at Li -wl 96h  -dt Va -nd 0:2  --casm -sf -ot vasp -o POS')
 
     parser.add_argument('-i', '--inpf', type=str,required=True,nargs='*',help='Input file(s), any file type compatible with ASE.')
-
     parser.add_argument('-o','--outf', type=str,required=False, help='Output file name. Def: Automatic naming: e.g. %s_ID.'%seed)
-
     parser.add_argument('-it','--itype', type=str,required=False, help='Input file type. Def: determined automatically from the extension.')
-
     parser.add_argument('-ot','--otype', default='res',type=str,required=False, help='Output file type, default: .res (SHELX format)')
-
     parser.add_argument('-od','--odir', default=outdir,type=str,required=False, help='Output directory, default: %s'%outdir)
 
     parser.add_argument('-ow','--overwrite', default=False,action='store_true', help='overwrite if output folder exists. Def: No')
-
     parser.add_argument('-rs','--restart', default=False,action='store_true', help='overwrite if output folder exists. Def: No')
-
+    parser.add_argument("-iseed","--inpseed", type=str, default=None, help="Seed name for reading the .param and .cell files in order to use the settings within.")
+    parser.add_argument('-sf','--sepfol', default=False,action='store_true', help='to save geometries in separate folders (e.g. for VASP runs). Default: all output is written in the same directory (%s).'%outdir)
+ 
     parser.add_argument('-prim','--ifPrim', default=False,action='store_true', help='use the primitive cell instead of supercell (requires SPGlib installed). Highly recommended for computational efficiency. Def: false')
-
     parser.add_argument('-ref', '--initCrysFile', type=str,help='File for obtaining the initial crystal site (symmetry) information. Can be any type that ASE supports. Def: same as the input file (-i)')
-
     parser.add_argument('-tol', '--tol',type=float, default=1e-3,help="The symmetry tolerance. Def: 1e-3")
-
     parser.add_argument('-nosymm','--nosymm', default=False,action='store_true', help='switch off the use of symmetry info, e.g. equivalent sites. (to remove SPGlib dependancy; not recommended).')
-
     parser.add_argument('-r','--rep', nargs=3, type=int,help="Repeat the input structure in a, b, c directions to get a supercell, e.g. -r 2 2 1")
 
     parser.add_argument('-n', '--atoms_list', nargs='*', type=int,help='list of atom ids representing the crys sites where the vacancy/dopant will be placed during enumeration (count starts at 1). Example usage: -n 1 3 4 ')
-
     parser.add_argument('-nl', '--list',help='atom list(count starts at 1); e.g. -nl 1:128')
-
     parser.add_argument('-at', '--aType',nargs='*', type=str,help='atom type to be included in enumeration; e.g. -at Na Li')
-
     parser.add_argument('-wl', '--wycklist',nargs='*',type=str,help='List of Wyckoff positions of crys. sites to include in enumeration. A list of available sites can be obtained via dry run (-dry); e.g. -wl 24d 12a')
-
     parser.add_argument('-excl', '--excludelist',nargs='*',type=str,help='List of crystal sites to exclude from the configuration eneumeration (these atoms will not be considered even though selected by -n, -nl,-at or -wl earlier).  e.g. 1:4 24  for [1,2,3,4,24], atom numbering starts at 1.')
-
     parser.add_argument('-dexcl','--dopeexcluded', default=False,action='store_true', help='Add dopant/vacancy to the atoms/crys-sites given in the xcluded list. This option is good for doing iterative vacncy/dopant addition with the previous knowledge of lower dopant/vacancy compositions. Def: False.')
-
     parser.add_argument('-dt', '--dType', required=True, type=str,help='Dopant type to consider in the enumeration; This can be an atom symbol (e.g. Na) or vacancy (e.g. Va)')
-
     parser.add_argument('-dexcl_type', '--dexcl_type', required=False, type=str,help='Dopant type to consider for the sites given in the excluded list (see -dexcl keyword for details). Def: equal to dType', default="")
-
     parser.add_argument('-nd', '--noDopants',required=True,nargs='*',type=str,help='(List of) number of dopant/vacancy to consider in enumeration; e.g. 0:4 24  for 0,1,2,3,4 and 24 vacancies)')
 
+    parser.add_argument('-mod','--modify', type=str,help="To make some final touches on the configurations selected for enumeration. Keep in mind that these final modifications shoudl refer to the new atom indices. You can combine multiple modifications using multiple 'statements' (enclosed by single-quotations), the order of the statements will be strictly followed. This is a useful option to do necessary modifications to compansate for the dopant effect  e.g. balancing the total system charge  by deleting additional (nearest) cations upon introducing higher-valence cation(s). Def: No additional modifications.  Example usage: -mod 'replace all within 2 of Al with Va'.")
+    parser.add_argument('-ai','--addint', default=False,action='store_true', help='To add the interstices as X atoms based on the  Wyckoff positions data for the reference symmetry gorup. Default: False.')
+    parser.add_argument('-ase','--ASE_symm', default=False,action='store_true', help='Verbose output. Default: False.')
 
+    parser.add_argument('-castep','--castep', default=False,action='store_true', help='Run quick, low-accuracy CASTEP calculations to estimate the configration energies. Default: Only Lennard-Jones and Morse potentials (as in ASE) are used.')
+    parser.add_argument('-vasp','--vasp', default=False,action='store_true', help='Use VASP to compute configration energies. Inputs are read from the args.idir folder')
+    parser.add_argument('-vexe','--vaspexe', type=str,required=False, default='vasp_std',help='Vasp exectuable. Def: vasp_std')
+    parser.add_argument('-cexe','--castepexe', type=str,required=False, default='castep.mpi',help='Vasp exectuable. Def: castep.mpi')
     parser.add_argument('-casm','--casm', default=False,action='store_true', help='to create prim.json and config_list.json files for CASM. Default: False.')
 
     parser.add_argument('-copy','--copyinp', default=False,action='store_true', help='to copy the files contained in "%s" folder. Default: False.'%inpdir)
-
     parser.add_argument('-id','--idir', default=inpdir,type=str,required=False, help='Input directory to copy the files from, default: %s'%inpdir)
 
     parser.add_argument('-mp','-makepotcar','--makepotcar', default=False,action='store_true', help='to compile POTCAR (for VASP) using actual atomic content. The environment variable ($VASP_PP_PATH) should be defined beforehand. Default: False.')
-
     parser.add_argument('--potcarxc', default="potpaw_PBE",type=str,choices=ppdirs,help='XC functional to use in making of POTCAR. Def: potpaw_PBE')
-
     parser.add_argument('-xc','--xc', type=str,required=False, default='pbe',help='Exchange correlation functional to use (pseudopots will be selected accordingly, e.g. LDA, PBE,PBEsol, etc. Def: PBE')
-
-    parser.add_argument('-mod','--modify', type=str,help="To make some final touches on the configurations selected for enumeration. Keep in mind that these final modifications shoudl refer to the new atom indices. You can combine multiple modifications using multiple 'statements' (enclosed by single-quotations), the order of the statements will be strictly followed. This is a useful option to do necessary modifications to compansate for the dopant effect  e.g. balancing the total system charge  by deleting additional (nearest) cations upon introducing higher-valence cation(s). Def: No additional modifications.  Example usage: -mod 'replace all within 2 of Al with Va'.")
-
-    parser.add_argument('-ai','--addint', default=False,action='store_true', help='To add the interstices as X atoms based on the  Wyckoff positions data for the reference symmetry gorup. Default: False.')
-
-
-    parser.add_argument('-castep','--castep', default=False,action='store_true', help='Run quick, low-accuracy CASTEP calculations to estimate the configration energies. Default: Only Lennard-Jones and Morse potentials (as in ASE) are used.')
-
-    parser.add_argument("-iseed","--inpseed", type=str, default=None, help="Seed name for reading the .param and .cell files in order to use the settings within.")
-
-    parser.add_argument('-vasp','--vasp', default=False,action='store_true', help='Use VASP to compute configration energies. Inputs are read from the args.idir folder')
-
-    parser.add_argument('-vexe','--vaspexe', type=str,required=False, default='vasp_std',help='Vasp exectuable. Def: vasp_std')
-
-    parser.add_argument('-cexe','--castepexe', type=str,required=False, default='castep.mpi',help='Vasp exectuable. Def: castep.mpi')
-
-    parser.add_argument('-sf','--sepfol', default=False,action='store_true', help='to save geometries in separate folders (e.g. for VASP runs). Default: all output is written in the same directory (%s).'%outdir)
+    parser.add_argument("-hubU", "--hubU", type=str,nargs="*",help="For defining the Hubbard U parameters (in eV) for specific atom and orbital types, e.g. -hubU Fe d 2.7, Sm f 6.1")
+    parser.add_argument("-mgm","--magmoms", default=None, nargs="*", required=False, help="Magnetic moments for a collinear calculation. Eg, 'Fe 5.0 Nb 0.6 O 0.6' Def.: None. If a defined element is not present in the POSCAR, no MAGMOM will be set for it.")
 
     parser.add_argument('-np', '--nprocs',type=int, default=32,help="No of processes to start for each CASTEP/VASP calculation through srun/mpirun. Def:32")
-
     parser.add_argument('-nt', '--ntasks',type=int, default=1,help="No of CASTEP/VASP tasks to run simultaneously. Def:1")
-
     parser.add_argument('-nn', '--nnodes',type=int, default=1,help="No of nodes to run CASTEP/VASP runs through srun. Def:1")
-
     parser.add_argument('-mpi','--mpirun', default=False,action='store_true', help='Use mpirun for parallel runs. Default: srun is used')
-
 
     parser.add_argument("-t","--temp", type=float, default=298.15, help="Temperature at which the configrational thermodnamics is computed. Def: 298.15K")
 
-
     parser.add_argument("-seq","--seq", type=int, default=0, help="If to run an automated sequential doping to reach the target number of dopants (), based on configuration energies/symmetry as selection criterion (--seqtype) at each step. Def: No sequential doping.")
-
     parser.add_argument("-spick","--seqpick", type=int, default=1, help="How many configs to pick at each step in a sequential doping. Def: 1")
-
     parser.add_argument("-stype","--seqtype", type=str, choices=['E','S','D','R'],default='E', help="How to sort the configurations at each step of  a sequential doping. Options: 'E': Based on Energy (low-energy configs are picked); 'S': based on symmetry (highest-symmetry configs picked); 'D': config(s) with highest degenaracy are picked; 'R': configs are picked randomly. Def: 'S' ")
 
-    parser.add_argument("-hubU", "--hubU", type=str,nargs="*",help="For defining the Hubbard U parameters (in eV) for specific atom and orbital types, e.g. -hubU Fe d 2.7, Sm f 6.1")
-
-    parser.add_argument("-mgm","--magmoms", default=None, nargs="*", required=False, help="Magnetic moments for a collinear calculation. Eg, 'Fe 5.0 Nb 0.6 O 0.6' Def.: None. If a defined element is not present in the POSCAR, no MAGMOM will be set for it.")
-
-
-    parser.add_argument('-ase','--ASE_symm', default=False,action='store_true', help='Verbose output. Default: False.')
-
     parser.add_argument('-v','--verb', default=False,action='store_true', help='Verbose output. Default: False.')
-
     parser.add_argument('-dry','--dry', default=False,action='store_true', help='Dry run to get the equivalent (Wyckoff) positons. Default: False.')
+    parser.add_argument('-noskip','--noskip', default=False,action='store_true', help='Do not skip problematic configs (and assigning them with 0 energy and P1 symmetry). Default: Bad configs are skipped.')
 
     args = parser.parse_args()
     initT0=time.time()
@@ -1605,7 +1568,9 @@ if __name__ == '__main__':
                         system('cp ../../../%s/INCAR ../../../%s/POTCAR ../../../%s/KPOINTS . &> /dev/null '%(args.idir,args.idir,args.idir)) #replace with cwd
                         #system('cp %s/%s/INCAR %s/%s/POTCAR %s/%s/KPOINTS .'%(cwd,args.idir,cwd,args.idir,cwd,args.idir)) #replace with cwd
                         try: e2,atoms=call_vasp_v2(fname,exe=exe,xc=args.xc,mgms=args.magmoms,hubU=hubU)
-                        except Exception as err: print('Problem with DFT calc of %s, (%s) skipping...'%(fname,err));chdir(cwd); return (e1,0.0,atoms,'P1 (1)')
+                        except Exception as err: 
+                            if args.noskip:  print('Problem with DFT calc of %s, (%s) stopping as requested...'%(fname,err));exit()
+                            else: print('Problem with DFT calc of %s, (%s)! \nSkipping the config and assign it with 0 energy and P1 symmetry as placeholder...'%(fname,err));chdir(cwd); return (e1,0.0,atoms,'P1 (1)')
 
                         #ASE does not get the Pressure right when restarting
                         P=float(Popen4("""grep pressure OUTCAR | tail -1 | awk '{print ($4+$9)*0.1}' """)[0][0]) #kB to GPa

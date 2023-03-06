@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import numpy as np
 import argparse
 import ase.io
@@ -7,37 +8,30 @@ from os import system
 from sys import exit
 import fractions
 import ase.build
-#import copy
-#import time
+import copy
+import time
 import ase.build.tools
 import matplotlib.pyplot as plt
 
-#Import other functions from the INTERFACER package
-#from tools.builder import *
-from tools.external import *
-from tools.analysis import *
-
-#Surface creation and alignment tool by James P. Darby.
-#This is the former join8.py
-
+"""LAST EDIT: jpd47 07/05/2017"""
 def calc_R1(x1,y1):
-	#gives a rotation matrix that will rotate x1 onto y1
-	Id = np.array([[1,0,0],[0,1,0],[0,0,1]])
-	u = np.cross(x1,y1)
+        #gives a rotation matrix that will rotate x1 onto y1
+        Id = np.array([[1,0,0],[0,1,0],[0,0,1]])
+       	u = np.cross(x1,y1)
+	
+        tol = 0.001
+        if np.linalg.norm(u) < tol:
+                return Id
 
-	tol = 0.001
-	if np.linalg.norm(u) < tol:
-			return Id
+        sin_th = np.linalg.norm(u)/(np.linalg.norm(x1)*np.linalg.norm(y1))
+        cos_th = np.dot(x1,y1)/(np.linalg.norm(x1)*np.linalg.norm(y1))
+        u = u/np.linalg.norm(u)
 
-	sin_th = np.linalg.norm(u)/(np.linalg.norm(x1)*np.linalg.norm(y1))
-	cos_th = np.dot(x1,y1)/(np.linalg.norm(x1)*np.linalg.norm(y1))
-	u = u/np.linalg.norm(u)
-
-	#use wiki formula for R1
-	ux = np.array([[0,-u[2],u[1]],[u[2],0,-u[0]],[-u[1],u[0],0]])
-	ut = np.tensordot(u,u,axes=0)
-	R1 = cos_th*Id + sin_th*ux + (1-cos_th)*ut
-	return(R1)
+        #use wiki formula for R1
+        ux = np.array([[0,-u[2],u[1]],[u[2],0,-u[0]],[-u[1],u[0],0]])
+        ut = np.tensordot(u,u,axes=0)
+        R1 = cos_th*Id + sin_th*ux + (1-cos_th)*ut
+        return(R1)
 
 def rotate_slab(slab):
 	d = slab.cell[0]
@@ -170,7 +164,7 @@ def square_slab(slab):
 	slab = wrap_coords(slab)
 	return slab
 
-def acute_Gauss(u,v):
+def acute_Guass(u,v):
         u = np.array(u)
         v = np.array(v)
         #start by making sure that u is smaller than v
@@ -204,7 +198,7 @@ def basis_change(ab,uv,ruv):
 def AG_slab(slab):
 	a = [slab.cell[0][i] for i in range(0,2)]
 	b = [slab.cell[1][i] for i in range(0,2)]
-	a2,b2 = acute_Gauss(a,b)
+	a2,b2 = acute_Guass(a,b)
 	a2_ab = basis_change([a,b],[a2,b2],[1,0])
 	b2_ab = basis_change([a,b],[a2,b2],[0,1])
 	#add the 0 to them so that they can be cut out
@@ -313,6 +307,7 @@ def reasnoble_slab_angles(Lmax=10,slab=None):
 
 def LCM_float(x,y,Lmax,ptol):
 	#find nx -ny <=tol
+	"""VERY VERY SHITTY WAY OF DOING THIS LOLOOLOL"""
 	swap = False
 	tol = 0.001
 	if x < y:
@@ -346,6 +341,7 @@ def flip_handedness(atoms):
 	swsp = [[x[1], x[0], x[2]] for x in sp]
 	atoms.set_scaled_positions(swsp)
 	return atoms
+
 
 def match_angles2(slab1_cell, angles1, slab2_cell, angles2, ptol=2.0, Lmax=15):
 	matches = []
@@ -483,17 +479,16 @@ def atom_density_check(atoms,slab):
 	ri = number_density(atoms)
 	rf = number_density(slab)
 	pd = abs((ri-rf)/ri*100)
-	if pd > 10.0: #10**-4:
-		#print ("number density of slab has changed by {:.2} percent".format(pd))
-		print ("number density of slab has changed by %%%.2f"%(pd))
-		#print ("exiting due to change in atom density...")
+	if pd > 10**-4:
+		print ("number density of slab1 has changed by {} percent".format(pd))
+		print ("exiting due to change in atom density...")
 
 def find_commensurate_supercell(slab1,slab2,Lmax,Lstep,ptol):
 	#loop over Ls increasing util finding a commensurate supercell
-	success = False
+	sucess = False
 	L = Lstep
-	while L <= Lmax and success == False:
-		print ("trying with L = %.2f A"%L)
+	while L <= Lmax and sucess == False:
+		print ("trying with L is", L)
 		angles2 = reasnoble_slab_angles(Lmax=L,slab=slab2)
 		angles1 = reasnoble_slab_angles(Lmax=L,slab=slab1)	
 		print ("comparing {} possible pairs".format(len(angles1)*len(angles2))	)
@@ -501,52 +496,78 @@ def find_commensurate_supercell(slab1,slab2,Lmax,Lstep,ptol):
 		if len(angles1) > 0 and len(angles2) > 0:
 			try:
 				choice =  match_angles2(slab1.cell, angles1, slab2.cell, angles2, ptol=ptol, Lmax=L)
-				success = True
+				sucess = True
 			except:
 				pass	
-		if success == False:
+		if sucess == False:
 			L += Lstep
-	if success == False:
+	if sucess == False:
 		print ("not possible within these tolerances")
 		exit()				
 	return choice
 
-def slab_aligner(slab1,slab2,L,Lmax,Lstep,ptol,thickness,atoms1,atoms2):
-        #find and repeat slabs as specified,
-        #One should use only 1 layer for a layer convergence test.
-        choice = find_commensurate_supercell(slab1,slab2,Lmax,Lstep,ptol)
-        crep = np.ceil(abs(thickness/np.dot(slab1.cell[2],(0,0,1)))) #This does not work properly, doesn't give the thickness desired by the user!!
-        #crep=1
-        #crep=  np.ceil((args.thickness/get_thickness(slab1)))
-        slab1 = cut_cell(slab1,choice[2],choice[3],(0,0,crep))
-        slab1 = square_slab(slab1)
-        crep = np.ceil(abs(thickness/np.dot(slab2.cell[2],(0,0,1))))
-        #crep=1
-        #crep=  np.ceil((args.thickness/get_thickness(slab2)))
-        slab2 = cut_cell(slab2,choice[4],choice[5],(0,0,crep))
-        slab2 = square_slab(slab2)
+if __name__== '__main__':
+	#read in arguments
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-i1", "--infile1", default="Libcc.cell")
+	parser.add_argument("-o", "--outfile")
+	parser.add_argument("-i2", "--infile2", default="Li2S.cell")
+	parser.add_argument("-m1","--miller1", default=(1,0,0), nargs="+", type=int)
+	parser.add_argument("-m2","--miller2", default=(1,0,0), nargs="+", type=int)
+	parser.add_argument("-msd","--max_slab_dimension",default=50)
+	parser.add_argument("-t","--thickness",default=10,type=float)
+	parser.add_argument("-pt","--percentage_tolerance",default=4)
+	args = parser.parse_args()
 
-        #rotate slab2 so that it is alligned with slab1
-        ase.build.rotate(slab2,slab1.cell[2],slab2.cell[2],slab2.cell[0],slab1.cell[0])
+	#read the bulk cells and the miller indicies
+	infile1 = args.infile1
+	miller1 = tuple(args.miller1)
+	infile2= args.infile2
+	miller2 = tuple(args.miller2)
+	if args.outfile:
+		outfile = args.outfile
+	else:
+		outfile ="interface.cell"
+	
+	#read in atoms and construct slab, need to repeat atoms to make view work
+	if "cif" in infile1:
+		atoms1 = ase.io.read(infile1, format='cif')
+	elif "cell" in infile1:
+		atoms1 = ase.io.read(infile1, format='castep-cell')
+	slab1 = make_slab(miller1,atoms1,repeat=(1,1,1),square=False)	
+	if "cif" in infile2:
+		atoms2 = ase.io.read(infile2, format='cif')
+	elif "cell" in infile2:
+		atoms2 = ase.io.read(infile2, format='castep-cell')
+	slab2 = make_slab(miller2,atoms2,repeat=(1,1,1),square=False)
+	slab2 = bot_to_top(slab2)
+	
+	#tolerances
+	ptol = float(args.percentage_tolerance)
+	Lmax = float(args.max_slab_dimension)
+	Lstep = 10
+	thickness = args.thickness
+		
+	#find and repeat slabs as specified,
+	choice = find_commensurate_supercell(slab1,slab2,Lmax,Lstep,ptol)
+	crep = np.ceil(abs(thickness/np.dot(slab1.cell[2],(0,0,1))))
+	slab1 = cut_cell(slab1,choice[2],choice[3],(0,0,crep))
+	slab1 = square_slab(slab1)
+	crep = np.ceil(abs(thickness/np.dot(slab2.cell[2],(0,0,1))))
+	slab2 = cut_cell(slab2,choice[4],choice[5],(0,0,crep))
+	slab2 = square_slab(slab2)
+	
+	#rotate slab2 so that it is alligned with slab1
+	ase.build.rotate(slab2,slab1.cell[2],slab2.cell[2],slab2.cell[0],slab1.cell[0])
 
-        #confirm that atom densities are the same as at the start
-        atom_density_check(atoms1,slab1)
-        atom_density_check(atoms2,slab2)
-        
-        return slab1,slab2
+	#confirm that atom densities are the same as at the start
+	atom_density_check(atoms1,slab1)
+	atom_density_check(atoms2,slab2)
 
-#NOT NEEDED PROBABLY:
-"""
-       #move this to slab aligner.
-        if args.creps1: creps1=args.creps1
-        else:                 creps1= int((args.thickness/get_thickness(slab1))) #SLAB1 is not defined yet.
-        if creps1==0:creps1=1
-        if args.creps2: creps2=args.creps2
-        else:                 creps2= int((args.thickness/get_thickness(slab2)))
-        if creps2==0:creps2=1
-
-        #slab1=slab1.repeat((1,1,creps1));         slab2=slab2.repeat((1,1,creps2))
-
-        slab1 = make_slab(miller1,atoms1,repeat=(1,1,creps1),square=False) #TODO:replace with creps
-        slab2 = make_slab(miller2,atoms2,repeat=(1,1,creps2),square=False)
-        """
+	#use the stack function to make the actual interface	
+	ase.io.write("slab2.cell",slab2,format="castep-cell")
+	ase.io.write("slab1.cell",slab1,format="castep-cell")
+	interface = ase.build.stack(slab1,slab2,maxstrain=False)
+	interface = wrap_coords(interface)		
+	ase.io.write(outfile,interface,format="castep-cell")
+	view(interface)

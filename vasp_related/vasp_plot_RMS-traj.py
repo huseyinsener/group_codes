@@ -42,7 +42,12 @@ from ase.geometry.analysis import Analysis
 
 #global minDist,deepcopy,dist
 global Z, e, kb,angtocm
-Z={'Na':1,'Li':1,'Mg':2,'Ca':2,'K':1,'H':1,'Sr':2} #ionic charge dict.
+# ------------------- sener modified this starting from here --------------------------
+
+#Z={'Na':1,'Li':1,'Mg':2,'Ca':2,'K':1,'H':1,'Sr':2} #ionic charge dict.
+Z={'Na':1,'Li':1,'Mg':2,'Ca':2,'K':1,'H':1,'Sr':2,'S':1,'P':1,'Nb':1,'O':1} #ionic charge dict.
+
+# to here <----------------------------------------------------------------------------
 e=1.6021776e-19 #elementry charge (C or equivalently A.s)
 kb=1.380648e-23 #Boltzmann (J/K)
 kb_eV=8.6173324e-5 #Boltzmann (eV/K)

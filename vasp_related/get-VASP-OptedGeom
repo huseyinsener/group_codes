@@ -1,0 +1,85 @@
+#!/bin/sh
+#module swap python-2.7.13-bk  python-3.6.3-bk
+
+#vasp_outcar2xyz
+#~/chaitools/vasp/vasp_out2xyz_noASE_bk.py  $1 $2 $3 $4 $5
+
+#if (-e RUN1) then  #csh
+if [ -e RUN1 ]; then
+#vasp_out2xyz_noASE_bk.py -i RUN*/OUTCAR OUTCAR -o all-traj.xyz $1 $2 $3 $4 $5
+vasp_any2xyz.py -i RUN*/XDATCAR XDATCAR -o all-traj.xyz $1 $2 $3 $4 $5
+if [ ! -s all-traj.xyz ]; then #if empty
+vasp_any2xyz.py -i RUN*/OUTCAR OUTCAR -o all-traj.xyz $1 $2 $3 $4 $5
+fi
+
+else
+#vasp_out2xyz_noASE_bk.py -i OUTCAR -o all-traj.xyz $1 $2 $3 $4 $5
+vasp_any2xyz.py -i XDATCAR -o all-traj.xyz $1 $2 $3 $4 $5
+if [ ! -s all-traj.xyz ]; then #if empty
+vasp_any2xyz.py -i OUTCAR -o all-traj.xyz $1 $2 $3 $4 $5
+fi
+fi
+#endif
+
+#if (! -e all-traj.xyz) then
+if [ ! -e all-traj.xyz ]; then
+exit
+fi
+#endif
+
+#sed  s/H1.5/H/ all-traj.xyz -i
+#sed  s/H.5/H/ all-traj.xyz -i
+
+
+#set NAtoms="`head -n 1 all-traj.xyz`"
+export NAtoms="`head -n 1 all-traj.xyz`"
+printf "$NAtoms\n\n" >opted.xyz
+tail -n $NAtoms all-traj.xyz >> opted.xyz
+
+#echo "Visualizing the trajectory..."
+##molden5.7 -m all-traj.xyz > /dev/null &
+#ase-gui-bk  all-traj.xyz > /dev/null &
+
+ase-gui  all-traj.xyz &> /dev/null &
+
+exit
+
+
+
+#############
+#OLD VERSION#
+#############
+
+~/chaitools/vasp/vasp_out2xyz_noASE_bk.py  $1 $2 $3 $4 $5
+
+if (! -e OUTCAR.xyz) then 
+exit
+endif
+
+#sed  s/H1.5/H/ OUTCAR.xyz -i
+#sed  s/H.5/H/ OUTCAR.xyz -i
+
+
+set NAtoms="`head -n 1 all-traj.xyz`"
+#echo $NAtoms
+echo "$NAtoms\n" > opted.xyz
+tail -n $NAtoms all-traj.xyz >> opted.xyz
+
+if (-e RUN1) then
+echo "Gathering trajectories from RUN*/"
+cat RUN*/OUTCAR.xyz OUTCAR.xyz > all-traj.xyz
+
+echo "Visualizing the trajectory..."
+#molden5.7 -m all-traj.xyz > /dev/null &
+ase-gui-bk  all-traj.xyz > /dev/null &
+
+
+else
+echo "Visualizing the trajectory using MOLDEN..."
+#molden5.7 -m OUTCAR.xyz > /dev/null &
+
+ase-gui-bk  OUTCAR.xyz > /dev/null &
+
+
+endif
+
