@@ -33,7 +33,7 @@ from tools.analysis import *
 
 """
 TODO:
-
+-CHECK energy calculations and picking the most stable surface/interface (lowest/highest?)
 - FIX the reading of Miller indices from user input in args.miller_list
 - Make sure that all interfaces slabs are not flipped randomly (due to bugs in ase.build.stack and cut functions)
 - Make sure that the ase. build cut and stack are working correctly. For interlayer sepration in stack does not work at times (two surface slab layers clash at low separation/distance!!)
@@ -260,8 +260,8 @@ def convSep(slab1,slab2,vac=None,sep_init=1.5,sep_final=4.0,sep_step=0.5,view=0,
                 a,b,c,alpha,beta,gamma=interface.cell.cellpar()
                 
                 nAt=interface.get_global_number_of_atoms()
-                if args.prog=='castep':x=call_castep(interface,typ="sp",dipolCorr='None',name='CASTEP-tmp/interface-sep_%.2fA'%sep,ENCUT=ecut,KPspacing=KP,PP=pp) #KPgrid='4 4 1'
-                elif args.prog=='vasp':x=call_vasp(interface,typ="sp",dipolCorr='None',name='VASP-tmp/interface-sep_%.2fA'%sep,ENCUT=ecut,KPspacing=KP,xc=xc,magmom=args.magmoms,sigma=sigma,exe=exe)
+                if args.prog=='castep':x=call_castep(interface,typ="sp",dipolCorr='None',name='CASTEP-tmp/interface-sep_%.2fA'%sep,ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,PP=pp) #KPgrid='4 4 1'
+                elif args.prog=='vasp':x=call_vasp(interface,typ="sp",dipolCorr='None',name='VASP-tmp/interface-sep_%.2fA'%sep,ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,xc=xc,magmom=args.magmoms,sigma=sigma,exe=exe)
                 elif args.prog=='ase':x=call_ase(interface,ctype=args.ase_pot,fmax=args.ase_fmax,steps=args.ase_gsteps,opt=0)
                 interface=x[-1]
                 Ecurr=x[0]
@@ -270,6 +270,7 @@ def convSep(slab1,slab2,vac=None,sep_init=1.5,sep_final=4.0,sep_step=0.5,view=0,
                 E.append(Ecurr/nAt)
                 if i==0 or  E[-1]<Emin: minSep=sep;Emin=E[-1];minInt=interface.copy()
                 str1+="Iter. #%d, Seperation: %.2f A, E / atom : %.5f eV, z-thickness: %.2f A \n"%(i+1,sep,E[-1],c)
+                print("Iter. #%d, Seperation: %.2f A, E / atom : %.5f eV, z-thickness: %.2f A \n"%(i+1,sep,E[-1],c))
                 #print("E_total: %.5f; deltaE: %.3e eV/atom; target: %.3e eV."%(E[i],abs(E[i]-E[i-1]),Etol))
                 if view: view(interface)
 
@@ -279,7 +280,7 @@ def convSep(slab1,slab2,vac=None,sep_init=1.5,sep_final=4.0,sep_step=0.5,view=0,
                 elif args.prog=="vasp":ase.io.write("OUTPUT/int-sep_%.2fA.vasp"%sep,interface,format='vasp',vasp5=1,append=app);
                 elif args.prog=="ase": ase.io.write("OUTPUT/int-sep_%.2fA.xyz" %sep,interface,format='extxyz',append=app);      
 
-        print(str1)
+        #print(str1)
         print('\nconvSep: Minimum-energy separation is %.2f A with E= %.5f eV'%(minSep,Emin))
 
         if minInt: interface=minInt.copy()
@@ -344,8 +345,8 @@ def checkHorizontal(slab1,slab2,sep,vac=None,steps=[0.25,0.25],ifPlot=0): #This 
 
                 nAt=interface.get_global_number_of_atoms()
                 interface.name='htrans_x%.2f-y%.2f'%(x,y)
-                if args.prog=='castep':xx=call_castep(interface,typ="sp",dipolCorr='None',name='CASTEP-tmp/htrans_x%.2f-y%.2f'%(x,y),ENCUT=ecut,KPspacing=KP,PP=pp) #KPgrid='4 4 1'
-                elif args.prog=='vasp':xx=call_vasp(interface,typ="sp",dipolCorr='None',name='VASP-tmp/htrans_x%.2f-y%.2f'%(x,y),ENCUT=ecut,KPspacing=KP,xc=xc,magmom=args.magmoms,sigma=sigma,exe=exe)
+                if args.prog=='castep':xx=call_castep(interface,typ="sp",dipolCorr='None',name='CASTEP-tmp/htrans_x%.2f-y%.2f'%(x,y),ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,PP=pp) #KPgrid='4 4 1'
+                elif args.prog=='vasp':xx=call_vasp(interface,typ="sp",dipolCorr='None',name='VASP-tmp/htrans_x%.2f-y%.2f'%(x,y),ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,xc=xc,magmom=args.magmoms,sigma=sigma,exe=exe)
                 elif args.prog=='ase':xx=call_ase(interface,ctype=args.ase_pot,fmax=args.ase_fmax,steps=args.ase_gsteps,opt=0)
                 interface=xx[-1]
                 Ecurr=xx[0]
@@ -653,7 +654,7 @@ if __name__== '__main__':
                         KP=float(grep('kpoints_mp_spacing',args.castep_cell).split()[-1])
                 except Exception as err: print("Can't read the param file:", err)
         elif args.prog == 'vasp':
-                dirr="./VASP-tmp" #not used, just here for completeness
+                dirr="./VASP-tmp" 
                 """
                 calc=Vasp()
                 calc.read_incar(filename='INCAR')
@@ -909,9 +910,7 @@ if __name__== '__main__':
                   
                 else:
                   slab1.name='slab1'
-                  if args.prog=='castep':
-                        #x=call_castep(slab1,typ="geom",dipolCorr='sc',name='slab1-aligned',ENCUT=ecut,KPgrid="1 1 1",PP=pp,FixCell=True,hubU=hubU)#,FixList=[1,2])
-                        x=call_castep(slab1,typ="geom",dipolCorr='sc',name='slab1-aligned',ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,PP=pp,FixCell=1,hubU=hubU)#,FixList=[1,2]) #Optimizer TPSD or FIRE can be used for fixed cell opts.
+                  if args.prog=='castep':          x=call_castep(slab1,typ="geom",dipolCorr='sc',name='slab1-aligned',ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,PP=pp,FixCell=1,hubU=hubU)#,FixList=[1,2]) #Optimizer TPSD or FIRE can be used for fixed cell opts.
                   elif args.prog=='vasp': 
                         if args.pas:pas='bot' 
                         else: pas=None
@@ -1053,8 +1052,8 @@ if __name__== '__main__':
                 if args.vac_int>4:dipC='SC'
                 else:dipC='None'
                 #CHECK: Should we fix the volume or not?? fix vol works for some cases (YIG) but not for some (Al2O3//Si)
-                if args.prog=="castep": x=call_castep(interface,typ="geom",dipolCorr=dipC,name='interface',ENCUT=ecut,PP=pp,KPspacing=KP,hubU=hubU)
-                elif args.prog=="vasp": x=call_vasp(interface,typ="geom",dipolCorr=dipC,name='interface',ENCUT=ecut,KPspacing=KP,hubU=hubU,FixVol=1,xc=xc,nosymm=1,magmom=args.magmoms) 
+                if args.prog=="castep": x=call_castep(interface,typ="geom",dipolCorr=dipC,name='interface',ENCUT=ecut,PP=pp,KPgrid=KPgrid,KPspacing=KP,hubU=hubU)
+                elif args.prog=="vasp": x=call_vasp(interface,typ="geom",dipolCorr=dipC,name='interface',ENCUT=ecut,KPgrid=KPgrid,KPspacing=KP,hubU=hubU,FixVol=0,xc=xc,nosymm=1,magmom=args.magmoms) 
                 elif args.prog=='ase': x=call_ase(interface,ctype=args.ase_pot,fmax=args.ase_fmax,steps=args.ase_gsteps,opt=True)
 
                 interface=x[-1]

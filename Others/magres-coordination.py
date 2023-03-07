@@ -444,7 +444,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-save","--save", action='store_true', default=False, help="Plotted data will be saved to separate dat files")
 
-    parser.add_argument("-boltz","--boltz", type=float, nargs="*",default=[0.], help="To weight the NMR peaks from multiple configurations using Boltzmann distribution at a given temperature [K] based on their formation energies to get a convoluted NMR spectrum. Def: no weighting is done. Usage: -boltz TEMP")
+    parser.add_argument("-boltz","--boltz", type=float, nargs="*",default=[0.], help="To weigh the NMR peaks from multiple configurations using Boltzmann distribution at a given temperature [K] based on their formation energies to get a convoluted NMR spectrum. Def: no weighting is done. Usage: -boltz TEMP")
     parser.add_argument("-pa","--EperAtom", action='store_true', default=False, help="Consider the relative energies per atom rather than total (relative) energies. Def: Relative total energies used.")
     #parser.add_argument("-fu","--Eperfu", action='store_true', default=False, help="Consider the relative energies per fu rather than total (relative) energies. Def: Relative total energies used.")
     parser.add_argument("-fu","--Eperfu", type=int, const=1,default=None,nargs="?",help="Consider the relative energies per fu rather than total (relative) energies. fu value can be set explicitly by using -fu X; otherwise it's auotmatically determined. Def: Relative total energies used.")

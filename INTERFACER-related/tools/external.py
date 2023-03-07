@@ -141,7 +141,9 @@ def call_vasp(atoms,calc=None, typ="sp",xc='PBE',
               FixVol=False,FixList=[],hubU={},ispin=0,restart=None,nelm=150,
               nsw=800,etol=1E-8,ediffg=-0.01,slowConv=0,ismear=0,sigma=0.01,
               passivate=None,gamma=1,algo="Fast",nosymm=0,exe=None,
-              mpiexe='mpirun',vac=0.0,magmom=None,view=False,dry=False,readINCAR=1):
+              mpiexe='mpirun',nproc=None,vac=0.0,magmom=None,view=False,
+              dry=False, readINCAR=1,setups='recommended'):
+
         #TODO: Read an external INCAR file for ENCUT, XC, KSPACING options
         if not exe: exe=getenv('VASP_COMMAND') ;# print ('bk')
         #if not exe: exe='vasp_std'
@@ -201,10 +203,28 @@ def call_vasp(atoms,calc=None, typ="sp",xc='PBE',
                 else:
                         #Standard ASE impletation for VASP-restart does not read the last geom for some reason, this is a simple trick to get the CONTCAR and same settigns from the prevoious run.
                         print ("Not converged, restarting from last point")
-                        atoms=ase.io.read('CONTCAR') #no energy so must be repeated.
+                        # #atoms=ase.io.read('CONTCAR') #no energy so must be repeated.
+                        # #atoms.set_calculator(calc)
+                        # vasp_continue() #copies prev. run  files into RUNX folder.
+                        # #atoms.write('POSCAR',format='vasp',vasp5=1)
+                        # #calc = Vasp(atoms,restart=restart, directory="./", label='vasp', command=exe, txt=None) #ignore_bad_restart_file=False,
+                        # calc = Vasp(restart=True)
+                        # #atoms.set_calculator(calc)
+                        # atoms = calc.get_atoms()
+
+                        calc=Vasp()
+                        calc.read_incar(filename='INCAR')
+                        if os.path.exists("./OUTCAR"):   vasp_continue()
+                        atoms=ase.io.read("POSCAR",format="vasp")
+                        #atoms=ase.io.read(fname)
+
+                        calc.set(xc=xc)
+                        #setups='recommended'
+                        #setups='minimal'
+                        calc.set(setups=setups)
+                        calc.directory="."#cdir
                         atoms.set_calculator(calc)
-                        vasp_continue() #copies prev. run  files into RUNX folder.
-                        #atoms.write('POSCAR',format='vasp',vasp5=1)
+
 
                 E=atoms.get_potential_energy()
                 chdir(cwd)
