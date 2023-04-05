@@ -11,6 +11,7 @@ import ase.build
 #import time
 import ase.build.tools
 import matplotlib.pyplot as plt
+import math
 
 #Import other functions from the INTERFACER package
 #from tools.builder import *
@@ -53,7 +54,7 @@ def rotate_slab(slab):
 	return slab
 
 def lcm(a,b):
-	return (a*b)//fractions.gcd(a,b)
+	return (a*b)//math.gcd(a,b)
 
 def get_cut_vectors(miller, atoms_cell):
 	#from miller indicies construct 2 lattice vectors in the required plane
