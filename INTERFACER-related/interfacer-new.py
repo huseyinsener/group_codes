@@ -151,8 +151,8 @@ def check_surfaces(atoms, miller_list,vac,Ebulk,creps):
         min_slab.set_calculator(calc)
         return Ws1, min_slab,calc,min_mil
 
-def conv_layers(atoms,vac=2.0,ifPlot=1,ifPrim=False, Etol=1e-2,view=0,lay_min=0,lay_max=5):#layer convergence test (Input atoms with a calc object). 
-        #print "Convergence of E/atom vs. #layers"
+def conv_layers(mil,atoms,vac=2.0,ifPlot=1,ifPrim=False, Etol=1e-2,view=0,lay_min=0,lay_max=5):#layer convergence test (Input atoms with a calc object). 
+        print ("Convergence of E/atom vs. #layers")
         #TODO: Take from user
         #Etol=1e-2 #eV/atom
         #Ftol=5e-2 #eV/Angstroem
@@ -160,15 +160,14 @@ def conv_layers(atoms,vac=2.0,ifPlot=1,ifPrim=False, Etol=1e-2,view=0,lay_min=0,
 
         #Initial values
         E=[0]; F=[0]; S=[0]
-        name=atoms.name
-        #name=atoms.get_chemical_formula(empirical=1)
+        name="%s_%d%d%d"%(atoms.get_chemical_formula(empirical=1),mil[0],mil[1],mil[2])
         atoms_orig=atoms.copy()
         calc=atoms.get_calculator()
 
         #find the primitive cells to reduce comp. efforts.
         if ifPrim: atoms=find_prim(atoms);atoms.set_calculator(calc)
         
-        atoms.center(vacuum=vac, axis=2)
+        #atoms.center(vacuum=vac, axis=2)
         #nAt=atoms.get_global_number_of_atoms()
         #atoms.set_calculator(calc)
         #E.append(atoms.get_potential_energy()/nAt)
@@ -176,32 +175,33 @@ def conv_layers(atoms,vac=2.0,ifPlot=1,ifPrim=False, Etol=1e-2,view=0,lay_min=0,
         flag=0 #converged?
         while  i<=lay_max:
                 layers.append(1+1*i) #increase 2 layers at a time
-                atoms=atoms_orig.copy()
-                atoms=atoms.repeat((1,1,layers[-1]))
-                atoms.center(vacuum=vac, axis=2)
+                #atoms=atoms_orig.copy()
+                #atoms=atoms.repeat((1,1,layers[-1]))
+                slab = make_slab(mil,atoms,repeat=(1,1,i+1),square=False)
+                slab.center(vacuum=vac, axis=2)
                 #atoms.set_calculator(calc)
                 #if args.view:xview(atoms)
                 #nAt=atoms.get_number_of_atoms()
-                nAt=atoms.get_global_number_of_atoms()
-                if args.prog=='castep':x=call_castep(atoms,typ="sp",dipolCorr='sc',name='CASTEP-tmp/%s_%d-layer'%(name,layers[-1]),ENCUT=ecut,KPspacing=KP,PP=pp) #KPgrid='4 4 1'
-                elif args.prog=='vasp':x=call_vasp(atoms,typ="sp",dipolCorr='sc',name='VASP-tmp/%s_%d-layer'%(name,layers[-1]),ENCUT=ecut,KPspacing=KP,xc=xc,magmom=args.magmoms,sigma=sigma,exe=exe)
-                elif args.prog=='ase':x=call_ase(atoms,ctype=args.ase_pot,fmax=args.ase_fmax,steps=args.ase_gsteps,opt=0)
-                atoms=x[-1]
+                nAt=slab.get_global_number_of_atoms()
+                if args.prog=='castep':x=call_castep(slab,typ="sp",dipolCorr='sc',name='CASTEP-tmp/%s_%d-layer'%(name,layers[-1]),ENCUT=ecut,KPspacing=KP,PP=pp) #KPgrid='4 4 1'
+                elif args.prog=='vasp':x=call_vasp(slab,typ="sp",dipolCorr='sc',name='VASP-tmp/%s_%d-layer'%(name,layers[-1]),ENCUT=ecut,KPspacing=KP,xc=xc,magmom=args.magmoms,sigma=sigma,exe=exe)
+                elif args.prog=='ase':x=call_ase(slab,ctype=args.ase_pot,fmax=args.ase_fmax,steps=args.ase_gsteps,opt=0)
+                slab=x[-1]
                 Ecurr=x[0]
                 #E.append(atoms.get_potential_energy()/nAt)
                 E.append(Ecurr/nAt)
                 print("Iter. #%d, #layers: %d, #atoms: %d "%(i+1,layers[-1],nAt))
-                print("E_total: %.5f; deltaE: %.3e eV/atom; target: %.3e eV."%(E[i],abs(E[i]-E[i-1]),Etol))
-                if view: view(atoms)
+                print("E_total: %.5f; deltaE: %.3e eV/atom; target: %.3e eV."%(E[i-lay_min+1],abs(E[i-lay_min+1]-E[i-lay_min]),Etol))
+                if view: view(slab)
 
                 #Writing layer steps
                 if i==lay_min: app=0 #append
                 else:app=1
-                if args.prog=="castep":ase.io.write("OUTPUT/%s-layer.cell"%(name),atoms,format='castep-cell',append=app); 
-                elif args.prog=="vasp":ase.io.write("OUTPUT/%s-layer.vasp"%(name),atoms,format='vasp-xdatcar',append=app);
-                elif args.prog=="ase": ase.io.write("OUTPUT/%s-layer.xyz" %(name),atoms,format='extxyz',append=app);      
+                if args.prog=="castep":ase.io.write("OUTPUT/%s-layer.cell"%(name),slab,format='castep-cell',append=app); 
+                elif args.prog=="vasp":ase.io.write("OUTPUT/%s-layer.vasp"%(name),slab,format='vasp-xdatcar',append=app);
+                elif args.prog=="ase": ase.io.write("OUTPUT/%s-layer.xyz" %(name),slab,format='extxyz',append=app);      
 
-                if i!=0 and abs(E[i]-E[i-1]) <= Etol:
+                if i!=0 and abs(E[i-lay_min+1]-E[i-lay_min]) <= Etol:
                        #print('Layer thickness of %d converged to %.3f eV'%(Etol)
                        flag=1
                        break
@@ -222,7 +222,7 @@ def conv_layers(atoms,vac=2.0,ifPlot=1,ifPrim=False, Etol=1e-2,view=0,lay_min=0,
 
                 
                 
-        return layers[-1],E[-1]*nAt,atoms               
+        return layers[-1],E[-1]*nAt,slab               
 
 
 def convSep(slab1,slab2,vac=None,sep_init=1.5,sep_final=4.0,sep_step=0.5,view=0,ifPlot=1, Etol=1e-2): #Converge the sepration bet ween the two surface slabs (keeping them rigid)
@@ -790,9 +790,9 @@ if __name__== '__main__':
                 slab1.name="%s_%d%d%d"%(slab1.get_chemical_formula(empirical=1),miller1[0],miller1[1],miller1[2])
                 slab2.name="%s_%d%d%d"%(slab2.get_chemical_formula(empirical=1),miller2[0],miller2[1],miller2[2])
                 print ('Running Material 1 (%s)'%(slab1.get_chemical_formula(empirical=1)))
-                nl1,Eslab1,slab1=conv_layers(slab1,vac=args.vac_slab,lay_min=args.lay_min-1,lay_max=args.lay_max-1)#,ifPrim=1)  #Vacuum layer is added automatically within the function.
+                nl1,Eslab1,slab1=conv_layers(miller1,atoms1,vac=args.vac_slab,lay_min=args.lay_min-1,lay_max=args.lay_max-1)#,ifPrim=1)  #Vacuum layer is added automatically within the function.
                 print ('\nRunning Material 2 (%s)'%(slab2.get_chemical_formula(empirical=1)))
-                nl2,Eslab2,slab2=conv_layers(slab2,vac=args.vac_slab,lay_min=args.lay_min-1,lay_max=args.lay_max-1)#,ifPrim=1)  #Vacuum layer is added automatically within the function.
+                nl2,Eslab2,slab2=conv_layers(miller2,atoms2,vac=args.vac_slab,lay_min=args.lay_min-1,lay_max=args.lay_max-1)#,ifPrim=1)  #Vacuum layer is added automatically within the function.
 
                 #TODO: complete this!!!
                 print('Minimum-energy thickness (creps):')
